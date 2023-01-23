@@ -18,11 +18,6 @@ outputs:
 runs:
   using: "composite"
   steps:
-    # Check out the repository
-    - uses: actions/checkout@v3
-      with:
-        ref: ${{ github.head_ref }}
-        token: ${{ inputs.github_token }}
     # Read and validate the labels from the pull request
     - id: read_labels
       shell: bash
