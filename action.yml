@@ -1,57 +1,61 @@
-name: Semantic Versioning
-on:
-  workflow_call:
-    # inputs:
-      # enable-code-scans:
-        # required: true
-        # type: boolean
-    secrets:
-      pat:
-        required: true
-        description: Github Personal Access token needed to execute authorized actions (e.g creating a commit)
+name: 'Semantic Versioning'
+description: 'Calculates the new semantic version based on pull request labels and then updates the version according to that'
 
-jobs:
-  versioning:
-    runs-on: ubuntu-latest
-    steps:
-      # Check out the repository
-      - uses: actions/checkout@v3
-        with:
-          ref: ${{ github.head_ref }}
-          token: ${{ secrets.pat }}
-      # Read and validate the labels from the pull request
-      - id: read_labels
-        shell: bash
-        run: |
-          labels=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" https://api.github.com/repos/${{ github.repository }}/issues/${{ github.event.number }}/labels)
-          echo "$labels"
-          # Parse the labels into an array
-          labels_array=$(jq -r '. | map(.name) | join(",")' <(echo "$labels"))
-          echo "$labels_array"
-          # Check if the labels contain "fix", "compatible", or "breaking"
-          if ! (echo "${labels_array[@]}" | grep -Eq "^(fix|compatible|breaking)$"); then
-            echo "Error: Invalid labels found. Only one of 'fix', 'compatible', or 'breaking' is allowed."
-            exit 1
-          fi
-          # Set variables
-          echo "labels_array=$labels_array" >> $GITHUB_OUTPUT
-      # Fetch the latest release version from GitHub
-      - id: fetch_latest_release
-        shell: bash
-        run: |
-          latest_release=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" https://api.github.com/repos/${{ github.repository }}/releases/latest)
-          latest_version=$(echo "$latest_release" | jq -r .tag_name)
-          echo "$latest_version"
-          echo "latest_version=$latest_version" >> $GITHUB_OUTPUT
-      # Fetch the latest pre-release version from GitHub
-      - id: fetch_latest_pre_release
-        shell: bash
-        run: |
-          latest_pre_release=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" "https://api.github.com/repos/${{ github.repository }}/releases?per_page=1&prerelease=true" | jq -r .[0].tag_name)
-          echo "$latest_pre_release"
-          echo "latest_pre_release=$latest_pre_release" >> $GITHUB_OUTPUT
-      # Determine the new version number based on the labels and the latest release version
-      - id: determine_version
+branding:
+  icon: file-text
+  color: blue
+
+inputs:
+  github_token:
+    description: "A personal access token to use; this token is used to add comments and labels to pull requests"
+    required: true
+    
+outputs:
+  new-version:
+    description: "New semantic version"
+    value: ${{ steps.determine_version.newVersion }}
+    
+runs:
+  using: "composite"
+  steps:
+    # Check out the repository
+    - uses: actions/checkout@v3
+      with:
+        ref: ${{ github.head_ref }}
+        token: ${{ inputs.github_token }}
+    # Read and validate the labels from the pull request
+    - id: read_labels
+      shell: bash
+      run: |
+        labels=$(curl -s -H "Authorization: token ${{ inputs.github_token }}" https://api.github.com/repos/${{ github.repository }}/issues/${{ github.event.number }}/labels)
+        echo "$labels"
+        # Parse the labels into an array
+        labels_array=$(jq -r '. | map(.name) | join(",")' <(echo "$labels"))
+        echo "$labels_array"
+        # Check if the labels contain "fix", "compatible", or "breaking"
+        if ! (echo "${labels_array[@]}" | grep -Eq "^(fix|compatible|breaking)$"); then
+          echo "Error: Invalid labels found. Only one of 'fix', 'compatible', or 'breaking' is allowed."
+          exit 1
+        fi
+        # Set variables
+        echo "labels_array=$labels_array" >> $GITHUB_OUTPUT
+    # Fetch the latest release version from GitHub
+    - id: fetch_latest_release
+      shell: bash
+      run: |
+        latest_release=$(curl -s -H "Authorization: token ${{ inputs.github_token }}" https://api.github.com/repos/${{ github.repository }}/releases/latest)
+        latest_version=$(echo "$latest_release" | jq -r .tag_name)
+        echo "$latest_version"
+        echo "latest_version=$latest_version" >> $GITHUB_OUTPUT
+    # Fetch the latest pre-release version from GitHub
+    - id: fetch_latest_pre_release
+      shell: bash
+      run: |
+        latest_pre_release=$(curl -s -H "Authorization: token ${{ inputs.github_token }}" "https://api.github.com/repos/${{ github.repository }}/releases?per_page=1&prerelease=true" | jq -r .[0].tag_name)
+        echo "$latest_pre_release"
+        echo "latest_pre_release=$latest_pre_release" >> $GITHUB_OUTPUT
+    # Determine the new version number based on the labels and the latest release version
+    - id: determine_version
         shell: pwsh
         run: |
           $labels = "${{ steps.read_labels.outputs.labels_array }}".Split(',')
