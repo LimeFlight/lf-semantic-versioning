@@ -1,0 +1,157 @@
+name: 'Semantic Versioning'
+description: 'Calculates the new semantic version based on pull request labels and the lastest prerelease version; then updates the version according to that'
+
+branding:
+  icon: file-text
+  color: blue
+
+inputs:
+  github_token:
+    description: "A personal access token to use; this token is used to add comments and labels to pull requests"
+    required: true
+    
+outputs:
+  new-version:
+    description: "New semantic version"
+    value: ${{ steps.determine_version.newVersion }}
+    
+runs:
+  using: "composite"
+  steps:
+    # Read and validate the labels from the pull request
+    - id: read_labels
+      shell: bash
+      run: |
+        labels=$(curl -s -H "Authorization: token ${{ inputs.github_token }}" https://api.github.com/repos/${{ github.repository }}/issues/${{ github.event.number }}/labels)
+        echo "$labels"
+        # Parse the labels into an array
+        labels_array=$(jq -r '. | map(.name) | join(",")' <(echo "$labels"))
+        echo "$labels_array"
+        # Check if the labels contain "fix", "compatible", or "breaking"
+        if ! (echo "${labels_array[@]}" | grep -Eq "^(fix|compatible|breaking)$"); then
+          echo "Error: Invalid labels found. Only one of 'fix', 'compatible', or 'breaking' is allowed."
+          exit 1
+        fi
+        # Set variables
+        echo "labels_array=$labels_array" >> $GITHUB_OUTPUT
+    # Fetch the latest release version from GitHub
+    - id: fetch_latest_release
+      shell: bash
+      run: |
+        latest_release=$(curl -s -H "Authorization: token ${{ inputs.github_token }}" https://api.github.com/repos/${{ github.repository }}/releases/latest)
+        latest_version=$(echo "$latest_release" | jq -r .tag_name)
+        echo "$latest_version"
+        echo "latest_version=$latest_version" >> $GITHUB_OUTPUT
+    # Fetch the latest pre-release version from GitHub
+    - id: fetch_latest_pre_release
+      shell: bash
+      run: |
+        latest_pre_release=$(curl -s -H "Authorization: token ${{ inputs.github_token }}" "https://api.github.com/repos/${{ github.repository }}/releases?per_page=1&prerelease=true" | jq -r .[0].tag_name)
+        echo "$latest_pre_release"
+        echo "latest_pre_release=$latest_pre_release" >> $GITHUB_OUTPUT
+    # Determine the new version number based on the labels and the latest release version
+    - id: determine_version
+        shell: pwsh
+        run: |
+          $labels = "${{ steps.read_labels.outputs.labels_array }}".Split(',')
+          $filteredLabel = $labels | Where-Object {
+              $_ -match "fix|compatible|breaking"
+          }
+          $selectedLabel = $filteredLabel
+          Write-Output "selected Label: $($selectedLabel)"
+          $latest_version = "${{ steps.fetch_latest_release.outputs.latest_version }}".Remove(0,1)
+          Write-Output "latest release: $($latest_version)"
+          #versioning label constants
+          $breaking = 'breaking'
+          $fix = 'fix'
+          $compatible = 'compatible'
+          $latestPreRelease = "${{ steps.fetch_latest_pre_release.outputs.latest_pre_release }}"
+          Write-Output "latest prerelease: $($latestPreRelease)"
+          $selectedVersion = ''
+          $major_version_latest = $latest_version.Split('.')[0]
+          $minor_version_latest = $latest_version.Split('.')[1]
+          $patch_version_latest = $latest_version.Split('.')[2]
+          # Compare the versions and use the higher one
+          if (-not $latestPreRelease) {
+            # No prerelease found, use the latest release
+            $selectedVersion = $latest_version
+          }
+          else {
+            $latestPreRelease = $latestPreRelease -replace '-beta.+', ''
+            $latestPreRelease = $latestPreRelease.Remove(0,1)
+            # Compare the version numbers
+            if ([version]$latestPreRelease -gt [version]$latest_version) {
+              # Prerelease is higher, we need to figure out what is higher
+              $newDiff = @(0, 0, 0);
+              $major_version_prerelease = $latestPreRelease.Split('.')[0]
+              $minor_version_prerelease = $latestPreRelease.Split('.')[1]
+              $patch_version_prerelease = $latestPreRelease.Split('.')[2]
+              $currentDiff = @(([int]$major_version_prerelease - [int]$major_version_latest),([int]$minor_version_prerelease - [int]$minor_version_latest), ([int]$patch_version_prerelease - [int]$patch_version_latest))
+              Write-Output "current Diff: $($currentDiff)"
+              if ($selectedLabel -eq $breaking) {
+                $newDiff = @(1, 0, 0);
+              } elseif ($selectedLabel -eq $compatible) {
+                $newDiff = @(0, 1, 0);
+              } else {
+                $newDiff = @(0, 0, 1);
+              }
+              $newVersionDiff = $newDiff
+              for ($i = 0; $i -lt $newDiff.Length; $i++) {
+                if ($newDiff[$i] -gt $currentDiff[$i]) {
+                  $newVersionDiff = $newDiff
+                  break
+                } elseif ($newDiff[$i] -lt $currentDiff[$i]) {
+                  $newVersionDiff = $currentDiff
+                  break
+                }
+              }
+              Write-Output "new Diff: $($newVersionDiff)"
+              $hasMajorIncrease = If ($newVersionDiff[0] -gt 0) {$true} Else {$false}
+              $hasMinorIncrease = If ($newVersionDiff[1] -gt 0) {$true} Else {$false}
+              If ($hasMajorIncrease -eq $true)
+              {
+                $selectedLabel = $breaking
+              } elseIf ($hasMinorIncrease -eq $true) {
+                $selectedLabel = $compatible
+              } else {
+                $selectedLabel = $fix
+              }
+              $selectedVersion = $latest_version
+              Write-Output "take selected label: $($selectedLabel)"
+            }
+            else {
+              # Latest Release is higher, use it
+              $selectedVersion = $latest_version
+            }
+          }
+          $newVersion = ''
+          # Determine the new version based on the labels
+          if ($selectedLabel -eq $fix) {
+            # Increment the patch version
+            $newVersion = "$major_version_latest.$minor_version_latest.$(([int]$patch_version_latest + 1))"
+          } elseif ($selectedLabel -eq $compatible) {
+            # Increment the minor version
+            $newVersion = "$major_version_latest.$(([int]$minor_version_latest + 1)).0"
+          } elseif ($selectedLabel -eq $breaking) {
+            # Increment the major version
+            $newVersion = "$(([int]$major_version_latest + 1)).0.0"
+          }
+          Write-Output "new version: $($newVersion)"
+          # Read the current version from the version.json file
+          $filePath = "version.json"
+          $versionFile = Get-Content $filePath
+          $current_version = ($versionFile | ConvertFrom-Json).version
+          # Compare the current and new versions
+          if ($current_version -ne $newVersion) {
+            # Create a new version.json file with the updated version
+            # Read the current version from the version.json file
+            $json = $versionFile | ConvertFrom-Json
+            $json.version = $newVersion
+            # Save the updated JSON object to a new file
+            $json | ConvertTo-Json | Set-Content $filePath
+            git config user.name "Semantic Versioning"
+            git config user.email "<>"
+            git add $filePath
+            git commit -m "Updated version.json [do-not-build]"
+            git push
+          }
