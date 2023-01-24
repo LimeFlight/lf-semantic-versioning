@@ -1,4 +1,4 @@
-name: 'Semantic Versioning'
+name: 'LimeFlight Semantic Versioning'
 description: 'Calculates the new semantic version based on pull request labels and the lastest prerelease version; then updates the version according to that'
 
 branding:
