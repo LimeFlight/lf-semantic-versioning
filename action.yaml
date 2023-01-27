@@ -65,7 +65,7 @@ runs:
         $breaking = 'breaking'
         $fix = 'fix'
         $compatible = 'compatible'
-        $latestPreRelease = "{{ steps.fetch_latest_pre_release.outputs.latest_pre_release }}"
+        $latestPreRelease = "${{ steps.fetch_latest_pre_release.outputs.latest_pre_release }}"
         Write-Output "latest prerelease: $($latestPreRelease)"
         $selectedVersion = ''
         $major_version_latest = $latest_version.Split('.')[0]
