@@ -53,19 +53,19 @@ runs:
     - id: determine_version
       shell: pwsh
       run: |
-        $labels = '${{ steps.read_labels.outputs.labels_array }}'.Split(',')
+        $labels = ${{ steps.read_labels.outputs.labels_array }}.Split(',')
         $filteredLabel = $labels | Where-Object {
             $_ -match "fix|compatible|breaking"
         }
         $selectedLabel = $filteredLabel
         Write-Output "selected Label: $($selectedLabel)"
-        $latest_version = '${{ steps.fetch_latest_release.outputs.latest_version }}'.Remove(0,1)
+        $latest_version = ${{ steps.fetch_latest_release.outputs.latest_version }}.Remove(0,1)
         Write-Output "latest release: $($latest_version)"
         #versioning label constants
         $breaking = 'breaking'
         $fix = 'fix'
         $compatible = 'compatible'
-        $latestPreRelease = "{{ steps.fetch_latest_pre_release.outputs.latest_pre_release }}"
+        $latestPreRelease = {{ steps.fetch_latest_pre_release.outputs.latest_pre_release }}
         Write-Output "latest prerelease: $($latestPreRelease)"
         $selectedVersion = ''
         $major_version_latest = $latest_version.Split('.')[0]
