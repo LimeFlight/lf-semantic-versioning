@@ -28,7 +28,8 @@ runs:
         labels_array=$(jq -r '. | map(.name) | join(",")' <(echo "$labels"))
         echo "$labels_array"
         # Check if the labels contain "fix", "compatible", or "breaking"
-        if ! (echo "${labels_array[@]}" | grep -Eq "^(fix|compatible|breaking)$"); then
+        count=$(echo "${labels_array[@]}" | grep -Eo "(fix|compatible|breaking)" | wc -l)
+        if ! [ "$count" -eq 1 ]; then
           echo "Error: Invalid labels found. Only one of 'fix', 'compatible', or 'breaking' is allowed."
           exit 1
         fi
