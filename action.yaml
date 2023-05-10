@@ -144,6 +144,26 @@ runs:
         $current_version = ($versionFile | ConvertFrom-Json).version
         # Compare the current and new versions
         if ($current_version -ne $newVersion) {
+          # Check if the Sonar project file exists
+          $sonarProjectFilePath = "sonar-project.properties"
+          if (Test-Path $sonarProjectFilePath) {
+              # Read the file content
+              $sonarFileContent = Get-Content $sonarProjectFilePath
+
+              # Check if the projectVersion property is present
+              $projectVersionLineIndex = $sonarFileContent.IndexOf(($sonarFileContent | Where-Object { $_ -match "^sonar.projectVersion=" }))
+              
+              if ($projectVersionLineIndex -ge 0) {
+                  # Update the projectVersion property
+                  $sonarFileContent[$projectVersionLineIndex] = "sonar.projectVersion=$($newVersion)"
+              } else {
+                  # Add the projectVersion property if it's not present
+                  $sonarFileContent += "`nsonar.projectVersion=$($newVersion)"
+              }
+
+              # Save the updated content to the file
+              Set-Content -Path $sonarProjectFilePath -Value $sonarFileContent
+          }
           # Create a new version.json file with the updated version
           # Read the current version from the version.json file
           $json = $versionFile | ConvertFrom-Json
