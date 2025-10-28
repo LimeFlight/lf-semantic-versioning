@@ -26,13 +26,13 @@ runs:
         echo "$labels"
         # Parse the labels that are relevant for versioning into an array
         labels_array=$(jq -r '. | map(.name) | join(",")' <(echo "$labels"))
-        filtered_array=()
-        for item in "${labels_array[@]}"; do
-            if [[ "$item" == "fix" || "$item" == "compatible" || "$item" == "breaking" ]]; then
-                filtered_array+=("$item")
-            fi
-        done
-        labels_array=${filtered_array[@]};
+        # filtered_array=()
+        # for item in "${labels_array[@]}"; do
+            # if [[ "$item" == "fix" || "$item" == "compatible" || "$item" == "breaking" ]]; then
+                # filtered_array+=("$item")
+            # fi
+        # done
+        # labels_array=${filtered_array[@]};
         echo "$labels_array"
         # Check if the labels contain only one instance of "fix", "compatible", or "breaking"
         count=$(echo "${labels_array[@]}" | grep -Eo "\b(fix|compatible|breaking)\b" | wc -l)
