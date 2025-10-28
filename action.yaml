@@ -24,10 +24,17 @@ runs:
       run: |
         labels=$(curl -s -H "Authorization: token ${{ inputs.github_token }}" https://api.github.com/repos/${{ github.repository }}/issues/${{ github.event.number }}/labels)
         echo "$labels"
-        # Parse the labels into an array
+        # Parse the labels that are relevant for versioning into an array
         labels_array=$(jq -r '. | map(.name) | join(",")' <(echo "$labels"))
+        filtered_array=()
+        for item in "${labels_array[@]}"; do
+            if [[ "$item" == "fix" || "$item" == "compatible" || "$item" == "breaking" ]]; then
+                filtered_array+=("$item")
+            fi
+        done
+        labels_array=${filtered_array[@]};
         echo "$labels_array"
-        # Check if the labels contain "fix", "compatible", or "breaking"
+        # Check if the labels contain only one instance of "fix", "compatible", or "breaking"
         count=$(echo "${labels_array[@]}" | grep -Eo "\b(fix|compatible|breaking)\b" | wc -l)
         if ! [ "$count" -eq 1 ]; then
           echo "Error: Invalid labels found. Only one of 'fix', 'compatible', or 'breaking' is allowed."
