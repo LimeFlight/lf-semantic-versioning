@@ -27,7 +27,8 @@ runs:
         # Parse the labels that are relevant for versioning into an array
         labels_array=$(jq -r '. | map(.name) | join(",")' <(echo "$labels"))
         filtered_array=()
-        for item in ${labels_array[@]}; do
+        IFS=',' read -a labels_as_array <<< "$labels_array"
+        for item in ${labels_as_array[@]}; do
             echo $item
             if [[ $item == "fix" || $item == "compatible" || $item == "breaking" ]]; then
                 filtered_array+=($item)
